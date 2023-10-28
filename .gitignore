@@ -1,0 +1,9 @@
+.direnv/
+.idea/
+
+*.exe
+*.log
+*.dll
+*.so
+
+*.tmp
