@@ -2,13 +2,21 @@ services:
   mysql:
     image: 'mysql:latest'
     environment:
-      - 'MYSQL_DATABASE=mydatabase'
+      - 'MYSQL_DATABASE=provlegisto'
       - 'MYSQL_PASSWORD=secret'
       - 'MYSQL_ROOT_PASSWORD=verysecret'
-      - 'MYSQL_USER=myuser'
+      - 'MYSQL_USER=provlegisto'
     ports:
-      - '3306'
-  redis:
-    image: 'redis:latest'
-    ports:
-      - '6379'
+      - '3306:3306'
+    volumes:
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+#  redis:
+#    image: 'redis:latest'
+#    ports:
+#      - '6379:6379'
+#  provlegisto:
+#    build:
+#      context: .
+#      dockerfile: Dockerfile
+#    ports:
+#      - '8080:8080'
