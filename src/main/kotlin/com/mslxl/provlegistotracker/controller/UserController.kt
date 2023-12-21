@@ -29,7 +29,7 @@ class UserController(val userMapper: UserMapper) {
         session.setAttribute("username", userDb.username)
         session.setAttribute("uid", userDb.id)
 
-        return PResult.ok("Welcome, ${userDb.displayName}")
+        return PResult.ok(userDb.displayName)
     }
 
     @PostMapping("/user/register")
@@ -43,8 +43,7 @@ class UserController(val userMapper: UserMapper) {
             userMapper.insertUser(user.username, passwordMd5, displayName, user.realName, false)
             return PResult.ok("Register complete")
         } catch (e: Exception) {
-            e.printStackTrace()
-            return PResult.err(PResult.ERROR_PROMPT, e.toString())
+            return PResult.err(PResult.ERROR_PROMPT, e.message?: e.toString())
         }
     }
 }
