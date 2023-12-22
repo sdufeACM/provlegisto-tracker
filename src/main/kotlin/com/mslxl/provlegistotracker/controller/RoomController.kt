@@ -9,7 +9,6 @@ import com.mslxl.provlegistotracker.util.SessionManager
 import jakarta.servlet.http.HttpSession
 import org.springframework.web.bind.annotation.*
 import java.time.ZonedDateTime
-import java.util.*
 import kotlin.random.Random
 
 @RestController("/room")
@@ -34,17 +33,15 @@ class RoomController(
     }
 
     @PostMapping("/room")
-    fun newRoom(@RequestBody room: RoomCreateRequest, session: HttpSession): PResult<String> {
+    fun newRoom(@RequestBody room: RoomCreateRequest, session: HttpSession): PResult<Int> {
         val uid = session.getAttribute("uid")
         if (uid == null && !room.allowAnonymous) {
             return PResult.err(PResult.ERROR_PROMPT, "You are not login, the limitation is available")
         }
-        val uuid = UUID.randomUUID()
         val username =
             if (uid == null) "anonymous" + Random.nextInt(1, 1000) else session.getAttribute("username") as String
-        session.setAttribute("room", uuid.toString())
         session.setAttribute("username", username)
-        synchronized(RoomController.Companion) {
+        synchronized(Companion) {
             val newRoom = Room(
                 roomCounter,
                 room.name,
@@ -55,8 +52,9 @@ class RoomController(
                 room.password
             )
             roomManager.createRoom(newRoom)
+            roomCounter += 1
         }
-        return PResult.ok(uuid.toString())
+        return PResult.ok(roomCounter)
     }
 
     @GetMapping("/room/{id}")
