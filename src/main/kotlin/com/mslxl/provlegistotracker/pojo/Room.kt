@@ -2,10 +2,9 @@ package com.mslxl.provlegistotracker.pojo
 
 import com.fasterxml.jackson.annotation.JsonIgnore
 import java.time.ZonedDateTime
-import java.util.UUID
 
 data class Room(
-    val uuid: UUID,
+    val id: Int,
     val name: String,
     val owner: String,
     val max: Int,

@@ -1,17 +1,18 @@
 package com.mslxl.provlegistotracker.ws
 
-import com.mslxl.provlegistotracker.util.RoomStorage
+import com.mslxl.provlegistotracker.util.RoomManager
+import com.mslxl.provlegistotracker.util.SessionManager
 import org.springframework.http.server.ServerHttpRequest
 import org.springframework.http.server.ServerHttpResponse
 import org.springframework.stereotype.Component
 import org.springframework.web.socket.WebSocketHandler
 import org.springframework.web.socket.server.HandshakeInterceptor
-import java.util.UUID
-import kotlin.random.Random
+import java.util.*
 
 @Component
 class WebSocketSubscribeInterceptor(
-    val roomStorage: RoomStorage
+    val roomManager: RoomManager,
+    val sessionManager: SessionManager
 ) : HandshakeInterceptor {
     override fun beforeHandshake(
         request: ServerHttpRequest,
@@ -19,35 +20,18 @@ class WebSocketSubscribeInterceptor(
         wsHandler: WebSocketHandler,
         attributes: MutableMap<String, Any>
     ): Boolean {
-        val roomUuid = try {
-            request.uri.path.substringAfter("/room/")
+        val sessionUuid = try {
+            request.uri.path.substringAfter("/session/")
                 .let { UUID.fromString(it) }
         } catch (e: Exception) {
             // room id is illegal or not exists
             return false
         }
 
-        val room = roomStorage.getRoom(roomUuid) ?: return false
+        val id = sessionManager.openSession(sessionUuid) ?: return false
 
-        if (!attributes.containsKey("uid")) {
-            if (!room.allowAnonymous) {
-                // not login while the room not allow anonymous
-                return false
-            } else {
-                attributes["username"] = "anonymous" + Random.nextInt(1, 1000)
-            }
-        }
-
-        if (room.passwordRequired) {
-            val inpPassword = request.headers["password"]?.firstOrNull()
-            if (room.password != inpPassword) {
-                // wrong password
-                return false
-            }
-        }
-
-        attributes["room"] = roomUuid
-
+        attributes["uuid"] = sessionUuid
+        attributes["room"] = id
         return true
     }
 

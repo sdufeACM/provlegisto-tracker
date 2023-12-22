@@ -1,41 +1,43 @@
 package com.mslxl.provlegistotracker.ws
 
-import com.fasterxml.jackson.annotation.JsonAnyGetter
-import com.fasterxml.jackson.annotation.JsonAnySetter
-import com.fasterxml.jackson.annotation.JsonIgnore
-import com.fasterxml.jackson.annotation.JsonTypeInfo
-import com.fasterxml.jackson.annotation.JsonTypeName
+import com.fasterxml.jackson.annotation.*
 import com.fasterxml.jackson.databind.ObjectMapper
-import com.mslxl.provlegistotracker.util.RoomStorage
+import com.mslxl.provlegistotracker.util.RoomManager
+import com.mslxl.provlegistotracker.util.SessionManager
 import org.springframework.stereotype.Component
 import org.springframework.web.socket.CloseStatus
 import org.springframework.web.socket.TextMessage
 import org.springframework.web.socket.WebSocketSession
 import org.springframework.web.socket.handler.TextWebSocketHandler
-import java.util.UUID
+import java.util.*
 import java.util.concurrent.Executors
+import java.util.concurrent.ScheduledExecutorService
 import java.util.concurrent.ScheduledFuture
 import java.util.concurrent.TimeUnit
 
 @Component
 class WebSocketSubscribeHandler(
-    val roomStorage: RoomStorage, val objectMapper: ObjectMapper
+    val roomManager: RoomManager,
+    val objectMapper: ObjectMapper,
+    val sessionManager: SessionManager
 ) : TextWebSocketHandler() {
     companion object {
-        val scheduledExecutorService = Executors.newScheduledThreadPool(10)
+        val scheduledExecutorService: ScheduledExecutorService = Executors.newScheduledThreadPool(5)
         val topicSession = HashMap<String, LinkedHashSet<WebSocketSession>>()
 
-        fun subscribeRoom(session: WebSocketSession, topic: String) {
-            topicSession.getOrPut(topic) {
+        fun subscribeTopic(session: WebSocketSession, topic: String, room: Int) {
+            val tag = "$room-$topic"
+            topicSession.getOrPut(tag) {
                 LinkedHashSet()
             }.add(session)
         }
 
-        fun unsubscribeRoom(session: WebSocketSession, topic: String) {
-            val sessionSet = topicSession[topic] ?: return
+        fun unsubscribeTopic(session: WebSocketSession, topic: String, room: Int) {
+            val tag = "$room-$topic"
+            val sessionSet = topicSession[tag] ?: return
             sessionSet.remove(session)
             if (sessionSet.isEmpty()) {
-                topicSession.remove(topic)
+                topicSession.remove(tag)
             }
         }
     }
@@ -101,13 +103,12 @@ class WebSocketSubscribeHandler(
         // init
         pongReceived = true
         val attr = session.attributes
-        val uuid = attr["room"] as UUID
-        roomStorage.inc(uuid)
+        val roomId = attr["room"] as Int
 
         // greet and ping
         session.sendJsonMessage(
             Response.Greet(
-                uuid.toString(), attr["username"].toString()
+                roomId.toString(), attr["username"].toString()
             )
         )
         futurePing = scheduledExecutorService.scheduleWithFixedDelay({
@@ -124,38 +125,42 @@ class WebSocketSubscribeHandler(
 
     override fun afterConnectionClosed(session: WebSocketSession, status: CloseStatus) {
         val attr = session.attributes
-        val uuid = attr["room"] as UUID
+        val roomId = attr["room"] as Int
+        val sessionUuid = attr["uuid"] as UUID
         futurePing.cancel(true)
-        roomStorage.dec(uuid)
         // clear subscribe
         subscribedTopics.forEach {
-            unsubscribeRoom(session, it)
+            unsubscribeTopic(session, it, roomId)
         }
         subscribedTopics.clear()
+        sessionManager.closeSession(sessionUuid)
     }
 
 
     override fun handleTextMessage(session: WebSocketSession, message: TextMessage) {
         val request = objectMapper.readValue(message.payload, Request::class.java)
-        val uuid = session.attributes["room"] as UUID
+        val roomId = session.attributes["room"] as Int
         when (request) {
             is Request.Ping -> session.sendJsonMessage(Response.Pong)
             is Request.Pong -> pongReceived = true
             is Request.Subscribe -> {
                 request.topics.forEach {
-                    subscribeRoom(session, it)
+                    subscribeTopic(session, it, roomId)
                     subscribedTopics.add(it)
                 }
             }
+
             is Request.Unsubscribe -> {
                 request.topics.forEach {
-                    unsubscribeRoom(session, it)
+                    unsubscribeTopic(session, it, roomId)
                     subscribedTopics.add(it)
                 }
             }
+
             is Request.Publish -> {
                 println(message)
-                topicSession[request.topic]?.let { sessions ->
+                val tag = "$roomId-${request.topic}"
+                topicSession[tag]?.let { sessions ->
                     val response = Response.Publish(request.topic, sessions.size, request.otherField)
                     sessions.asSequence()
                         .filter { it.isOpen }
