@@ -41,7 +41,7 @@ class RoomController(
         val username =
             if (uid == null) "anonymous" + Random.nextInt(1, 1000) else session.getAttribute("username") as String
         session.setAttribute("username", username)
-        synchronized(Companion) {
+        val curRoomId = synchronized(Companion) {
             val newRoom = Room(
                 roomCounter,
                 room.name,
@@ -52,9 +52,11 @@ class RoomController(
                 room.password
             )
             roomManager.createRoom(newRoom)
+            val id = roomCounter
             roomCounter += 1
+            id
         }
-        return PResult.ok(roomCounter)
+        return PResult.ok(curRoomId)
     }
 
     @GetMapping("/room/{id}")
